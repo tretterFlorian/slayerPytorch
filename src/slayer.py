@@ -348,6 +348,9 @@ class spikeLayer(torch.nn.Module):
         '''
         return _delayFunctionNoGradient.apply(input, delay, Ts)
 
+    def delayJitter(self, input, delayRange, Ts=1):
+        return _delayJitterFunctionNoGradient.apply(input, delayRange, Ts)
+
     def delay(self, inputSize):
         '''
         Returns a function that can be called to apply delay opeartion in time dimension of the input tensor.
@@ -966,6 +969,29 @@ class _delayFunctionNoGradient(torch.autograd.Function):
         device = input.device
         dtype  = input.dtype
         output = slayerCuda.shift(input.contiguous(), delay, Ts)
+        Ts     = torch.autograd.Variable(torch.tensor(Ts   , device=device, dtype=dtype), requires_grad=False)
+        delay  = torch.autograd.Variable(torch.tensor(delay, device=device, dtype=dtype), requires_grad=False)
+        ctx.save_for_backward(delay, Ts)
+        return output
+
+    @staticmethod
+    def backward(ctx, gradOutput):
+        '''
+        '''
+        (delay, Ts) = ctx.saved_tensors
+        return slayerCuda.shift(gradOutput.contiguous(), -delay, Ts), None, None
+
+class _delayJitterFunctionNoGradient(torch.autograd.Function):
+    '''
+    '''
+    @staticmethod
+    def forward(ctx, input, delay, Ts=1):
+        '''
+        '''
+        device = input.device
+        dtype  = input.dtype
+        delayJitter = input[..., -1] + np.random.randint(1, 10, size=(input.shape[-1],))
+        output = np.concatenate((input[..., :-1], delayJitter[..., np.newaxis]), axis=-1)
         Ts     = torch.autograd.Variable(torch.tensor(Ts   , device=device, dtype=dtype), requires_grad=False)
         delay  = torch.autograd.Variable(torch.tensor(delay, device=device, dtype=dtype), requires_grad=False)
         ctx.save_for_backward(delay, Ts)
